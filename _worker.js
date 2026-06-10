@@ -1,4 +1,4 @@
-// MM-TH PREMIUM - Dedicated Cloudflare Pages VLESS Engine
+// Cloudflare Pages Dedicated VLESS Engine - Production Core
 const UUID = 'b67db792-7ec0-449d-b4b6-079d86a4e21a';
 
 export default {
@@ -128,5 +128,5 @@ function getAdminHTML(hostName) {
       <textarea style="width:100%;height:90px;background:#222;color:#fff;border:1px solid #444;padding:5px;" readonly>vless://${UUID}@${hostName}:443?encryption=none&flow=none&type=ws&host=${hostName}&headerType=none&path=%2F%3Fed%3D2048&security=tls&fp=randomized&sni=${hostName}#Ais online 20ms</textarea>
     </div>
   </body></html>`;
-    }
+      }
 
