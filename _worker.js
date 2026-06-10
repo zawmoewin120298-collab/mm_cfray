@@ -1,4 +1,4 @@
-// BPB-CF-Pages & VLESS Core Engine - Custom Host/SNI Edition
+// BPB-CF-Pages & VLESS Production Engine (Fixed Timeout)
 import { connect } from 'cloudflare:sockets';
 
 const UUID = 'b67db792-7ec0-449d-b4b6-079d86a4e21a';
@@ -45,26 +45,41 @@ async function vlessOverWSHandler(request) {
   const [client, server] = Object.values(webSocketPair);
   server.accept();
 
-  let address = '';
-  let portWithRandomLog = '';
+  let tcpSocket = null;
 
   server.addEventListener('message', async ({ data }) => {
     try {
+      if (tcpSocket) {
+        // Core Logic: If TCP Socket is open, stream data straight away
+        const writer = tcpSocket.writable.getWriter();
+        await writer.write(new Uint8Array(data));
+        writer.releaseLock();
+        return;
+      }
+
+      // Parse VLESS Header and create TCP connection
       const vlessBuffer = data;
       const addressInfo = processVlessHeader(vlessBuffer);
       if (!addressInfo) return;
-      
-      address = addressInfo.address;
-      portWithRandomLog = addressInfo.port;
 
-      const tcpSocket = connect({ hostname: address, port: portWithRandomLog });
-      await Promise.all([
-        handleClientToTcp(server, tcpSocket),
-        handleTcpToClient(tcpSocket, server)
-      ]);
+      tcpSocket = connect({ hostname: addressInfo.address, port: addressInfo.port });
+      
+      // Establishing bidirectional stream data flow between client and target
+      handleTcpToClient(tcpSocket, server);
+
+      // Write the first data payload after removing VLESS metadata header
+      const writer = tcpSocket.writable.getWriter();
+      const payload = new Uint8Array(vlessBuffer.slice(addressInfo.offset));
+      await writer.write(payload);
+      writer.releaseLock();
+
     } catch (error) {
-      console.log(error.toString());
+      server.close(1006, "Internal Error");
     }
+  });
+
+  server.addEventListener('close', () => {
+    if (tcpSocket) tcpSocket.close();
   });
 
   return new Response(null, { status: 101, webSocket: client });
@@ -72,29 +87,43 @@ async function vlessOverWSHandler(request) {
 
 function processVlessHeader(buffer) {
   if (buffer.byteLength < 24) return null;
-  const cmd = new Uint8Array(buffer.slice(18, 19))[0];
-  if (cmd !== 1) return null; 
+  const view = new DataView(buffer);
   
-  const port = new DataView(buffer.slice(19, 21)).getUint16(0);
-  const addressType = new Uint8Array(buffer.slice(21, 22))[0];
+  // VLESS Structure Check
+  const cmd = view.getUint8(18); 
+  if (cmd !== 1) return null; // Only allow TCP Connect
+  
+  const port = view.getUint16(19);
+  const addressType = view.getUint8(21);
   let address = "";
-  let addressBeginIndex = 22;
+  let offset = 22;
 
-  if (addressType === 1) {
-    address = new Uint8Array(buffer.slice(addressBeginIndex, addressBeginIndex + 4)).join('.');
-  } else if (addressType === 2) {
-    const addressLength = new Uint8Array(buffer.slice(addressBeginIndex, addressBeginIndex + 1))[0];
-    addressBeginIndex += 1;
-    address = new TextDecoder().decode(buffer.slice(addressBeginIndex, addressBeginIndex + addressLength));
+  if (addressType === 1) { // IPv4
+    address = new Uint8Array(buffer.slice(offset, offset + 4)).join('.');
+    offset += 4;
+  } else if (addressType === 2) { // Domain Name
+    const domainLength = view.getUint8(offset);
+    offset += 1;
+    address = new TextDecoder().decode(buffer.slice(offset, offset + domainLength));
+    offset += domainLength;
+  } else if (addressType === 3) { // IPv6
+    return null; // Bypass IPv6 for stability
   }
-  return { address, port };
+
+  return { address, port, offset };
 }
 
-async function handleClientToTcp(ws, tcp) {
-  // Transfer logic
-}
-async function handleTcpToClient(tcp, ws) {
-  // Transfer logic
+async function handleTcpToClient(tcpSocket, wsServer) {
+  try {
+    const reader = tcpSocket.readable.getReader();
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      wsServer.send(value.buffer);
+    }
+  } catch (err) {
+    wsServer.close(1006, "Connection Closed");
+  }
 }
 
 function getAdminHTML(hostName) {
@@ -111,5 +140,5 @@ function getAdminHTML(hostName) {
       <textarea style="width:100%;height:90px;background:#222;color:#fff;border:1px solid #444;padding:5px;" readonly>vless://${UUID}@${hostName}:443?encryption=none&flow=none&type=ws&host=${hostName}&headerType=none&path=%2F%3Fed%3D2048&security=tls&fp=randomized&sni=${hostName}#True online 30ms</textarea>
     </div>
   </body></html>`;
-    }
-
+                          }
+      
