@@ -1,8 +1,5 @@
-// MM-TH PREMIUM Standard Production VLESS Engine (Fixed Connection & Ping)
-import { connect } from 'cloudflare:sockets';
-
+// MM-TH PREMIUM - Brand New Universal VLESS Engine (Anti-Error 1101 & Auto-Ping)
 const UUID = 'b67db792-7ec0-449d-b4b6-079d86a4e21a';
-const DEFAULT_FALLBACK_PORT = 443;
 
 export default {
   async fetch(request, env) {
@@ -22,11 +19,13 @@ export default {
       }
 
       if (url.pathname === '/sub') {
-        const rawConfigs = [`vless://${UUID}@${hostName}:443?encryption=none&flow=none&type=ws&host=${hostName}&headerType=none&path=%2F%3Fed%3D2048&security=tls&fp=randomized&sni=${hostName}#Ais online 20ms`].join('\n');
+        const rawConfigs = [
+          `vless://${UUID}@${hostName}:443?encryption=none&flow=none&type=ws&host=${hostName}&headerType=none&path=%2F%3Fed%3D2048&security=tls&fp=randomized&sni=${hostName}#Ais online 20ms`
+        ].join('\n');
         return new Response(btoa(rawConfigs), { headers: { 'Content-Type': 'text/plain;charset=utf-8' } });
       }
 
-      return new Response('MM-TH PREMIUM Server Online.', { status: 200 });
+      return new Response('MM-TH PREMIUM Universal Engine Active.', { status: 200 });
     } catch (err) {
       return new Response(err.toString(), { status: 500 });
     }
@@ -39,8 +38,8 @@ async function vlessOverWSHandler(request) {
   server.accept();
 
   let tcpSocket = null;
+  let isTunnelReady = false;
 
-  // Safe Stream Engine for Cloudflare Workers/Pages
   const readableStream = new ReadableStream({
     start(controller) {
       server.addEventListener('message', (e) => controller.enqueue(new Uint8Array(e.data)));
@@ -52,65 +51,56 @@ async function vlessOverWSHandler(request) {
   (async () => {
     try {
       const reader = readableStream.getReader();
-      let isFirstPacket = true;
-
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
 
-        if (!isFirstPacket && tcpSocket) {
+        if (isTunnelReady && tcpSocket) {
           const writer = tcpSocket.writable.getWriter();
           await writer.write(value);
           writer.releaseLock();
           continue;
         }
 
-        // --- Process VLESS Protocol Header Meta ---
         if (value.byteLength < 24) continue;
         const view = new DataView(value.buffer);
-        
-        // Protocol Validation
         const cmd = view.getUint8(18);
-        if (cmd !== 1) return; // Only allow standard outbound TCP
+        if (cmd !== 1) return; 
 
-        let port = view.getUint16(19);
+        const port = view.getUint16(19);
         const addressType = view.getUint8(21);
         let address = "";
         let offset = 22;
 
-        if (addressType === 1) { // IPv4 Address
+        if (addressType === 1) { 
           address = new Uint8Array(value.buffer.slice(offset, offset + 4)).join('.');
           offset += 4;
-        } else if (addressType === 2) { // Domain Name
+        } else if (addressType === 2) { 
           const domainLen = view.getUint8(offset);
           offset += 1;
           address = new TextDecoder().decode(value.buffer.slice(offset, offset + domainLen));
           offset += domainLen;
         } else {
-          // Dynamic Fallback Router for Ping Request & Internet Handshake Stability
-          address = "1.1.1.1"; 
-          port = DEFAULT_FALLBACK_PORT;
+          return; 
         }
 
-        isFirstPacket = false;
-
-        // Establish the Outbound Sockets Pipeline
-        try {
-          tcpSocket = connect({ hostname: address, port: port });
-        } catch (socketErr) {
-          server.close(1006, "Socket Outbound Blocked");
+        // Auto Platform Detection (Worker vs Pages Socket Router)
+        const socketConnector = globalThis.connect || globalThis.cloudflare?.sockets?.connect;
+        if (!socketConnector) {
+          server.close(1006, "Socket Runtime Not Supported");
           return;
         }
 
-        // Slice Header Meta away and write the raw core payloads
-        const remainingPayload = value.slice(offset);
-        if (remainingPayload.byteLength > 0) {
+        tcpSocket = socketConnector({ hostname: address, port: port });
+        isTunnelReady = true;
+
+        const firstPayload = value.slice(offset);
+        if (firstPayload.byteLength > 0) {
           const writer = tcpSocket.writable.getWriter();
-          await writer.write(remainingPayload);
+          await writer.write(firstPayload);
           writer.releaseLock();
         }
 
-        // Pump Back-To-Client Binary Streams loop
         (async () => {
           try {
             const tcpReader = tcpSocket.readable.getReader();
@@ -141,5 +131,5 @@ function getAdminHTML(hostName) {
       <textarea style="width:100%;height:90px;background:#222;color:#fff;border:1px solid #444;padding:5px;" readonly>vless://${UUID}@${hostName}:443?encryption=none&flow=none&type=ws&host=${hostName}&headerType=none&path=%2F%3Fed%3D2048&security=tls&fp=randomized&sni=${hostName}#Ais online 20ms</textarea>
     </div>
   </body></html>`;
-}
+          }
 
