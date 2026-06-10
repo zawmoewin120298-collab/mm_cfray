@@ -1,4 +1,4 @@
-// BPB-CF-Pages & VLESS Production Engine (Fixed Timeout)
+// BPB-CF-Pages & VLESS Production Engine (Fixed Internet Flow)
 import { connect } from 'cloudflare:sockets';
 
 const UUID = 'b67db792-7ec0-449d-b4b6-079d86a4e21a';
@@ -50,31 +50,32 @@ async function vlessOverWSHandler(request) {
   server.addEventListener('message', async ({ data }) => {
     try {
       if (tcpSocket) {
-        // Core Logic: If TCP Socket is open, stream data straight away
+        // If TCP Connection is active, pump data into it
         const writer = tcpSocket.writable.getWriter();
         await writer.write(new Uint8Array(data));
         writer.releaseLock();
         return;
       }
 
-      // Parse VLESS Header and create TCP connection
+      // First packet contains VLESS metadata header
       const vlessBuffer = data;
       const addressInfo = processVlessHeader(vlessBuffer);
       if (!addressInfo) return;
 
+      // Connect to upstream proxy/website target
       tcpSocket = connect({ hostname: addressInfo.address, port: addressInfo.port });
       
-      // Establishing bidirectional stream data flow between client and target
+      // Establish reverse pipeline stream (Target TCP -> Client WebSocket)
       handleTcpToClient(tcpSocket, server);
 
-      // Write the first data payload after removing VLESS metadata header
+      // Write the remaining data payload after cutting header metadata
       const writer = tcpSocket.writable.getWriter();
       const payload = new Uint8Array(vlessBuffer.slice(addressInfo.offset));
       await writer.write(payload);
       writer.releaseLock();
 
     } catch (error) {
-      server.close(1006, "Internal Error");
+      server.close(1006, "Tunnel Connection Error");
     }
   });
 
@@ -89,40 +90,41 @@ function processVlessHeader(buffer) {
   if (buffer.byteLength < 24) return null;
   const view = new DataView(buffer);
   
-  // VLESS Structure Check
   const cmd = view.getUint8(18); 
-  if (cmd !== 1) return null; // Only allow TCP Connect
+  if (cmd !== 1) return null; // 1 = TCP Connect
   
   const port = view.getUint16(19);
   const addressType = view.getUint8(21);
   let address = "";
   let offset = 22;
 
-  if (addressType === 1) { // IPv4
+  if (addressType === 1) { // IPv4 Address
     address = new Uint8Array(buffer.slice(offset, offset + 4)).join('.');
     offset += 4;
-  } else if (addressType === 2) { // Domain Name
+  } else if (addressType === 2) { // Domain Name String
     const domainLength = view.getUint8(offset);
     offset += 1;
     address = new TextDecoder().decode(buffer.slice(offset, offset + domainLength));
     offset += domainLength;
-  } else if (addressType === 3) { // IPv6
-    return null; // Bypass IPv6 for stability
+  } else {
+    return null; // Ignore IPv6 for stability rules
   }
 
   return { address, port, offset };
 }
 
+// Fixed Data Handler Logic: Streams binary chunks flawlessly back to NetMod client
 async function handleTcpToClient(tcpSocket, wsServer) {
   try {
     const reader = tcpSocket.readable.getReader();
     while (true) {
       const { value, done } = await reader.read();
       if (done) break;
+      // Wrap ArrayBuffer into raw frame stream
       wsServer.send(value.buffer);
     }
   } catch (err) {
-    wsServer.close(1006, "Connection Closed");
+    wsServer.close(1006, "Stream Ended");
   }
 }
 
@@ -135,10 +137,7 @@ function getAdminHTML(hostName) {
     <div style="margin-top:20px;text-align:left;display:inline-block;width:90%;">
       <label style="color:#fff;">AIS Config:</label>
       <textarea style="width:100%;height:90px;background:#222;color:#fff;border:1px solid #444;padding:5px;" readonly>vless://${UUID}@${hostName}:443?encryption=none&flow=none&type=ws&host=${hostName}&headerType=none&path=%2F%3Fed%3D2048&security=tls&fp=randomized&sni=${hostName}#Ais online 20ms</textarea>
-      <br><br>
-      <label style="color:#fff;">TRUE Config:</label>
-      <textarea style="width:100%;height:90px;background:#222;color:#fff;border:1px solid #444;padding:5px;" readonly>vless://${UUID}@${hostName}:443?encryption=none&flow=none&type=ws&host=${hostName}&headerType=none&path=%2F%3Fed%3D2048&security=tls&fp=randomized&sni=${hostName}#True online 30ms</textarea>
     </div>
   </body></html>`;
-                          }
-      
+  }
+
