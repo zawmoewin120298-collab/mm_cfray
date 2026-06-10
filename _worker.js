@@ -1,4 +1,4 @@
-// MM-TH PREMIUM - Brand New Universal VLESS Engine (Anti-Error 1101 & Auto-Ping)
+// MM-TH PREMIUM - Dedicated Workers VLESS Engine (Fix Error 1101)
 const UUID = 'b67db792-7ec0-449d-b4b6-079d86a4e21a';
 
 export default {
@@ -19,13 +19,11 @@ export default {
       }
 
       if (url.pathname === '/sub') {
-        const rawConfigs = [
-          `vless://${UUID}@${hostName}:443?encryption=none&flow=none&type=ws&host=${hostName}&headerType=none&path=%2F%3Fed%3D2048&security=tls&fp=randomized&sni=${hostName}#Ais online 20ms`
-        ].join('\n');
+        const rawConfigs = [`vless://${UUID}@${hostName}:443?encryption=none&flow=none&type=ws&host=${hostName}&headerType=none&path=%2F%3Fed%3D2048&security=tls&fp=randomized&sni=${hostName}#Ais online 20ms`].join('\n');
         return new Response(btoa(rawConfigs), { headers: { 'Content-Type': 'text/plain;charset=utf-8' } });
       }
 
-      return new Response('MM-TH PREMIUM Universal Engine Active.', { status: 200 });
+      return new Response('MM-TH PREMIUM Worker Core Active.', { status: 200 });
     } catch (err) {
       return new Response(err.toString(), { status: 500 });
     }
@@ -84,14 +82,15 @@ async function vlessOverWSHandler(request) {
           return; 
         }
 
-        // Auto Platform Detection (Worker vs Pages Socket Router)
+        // Safe Fallback Sockets Router for Workers Platform
         const socketConnector = globalThis.connect || globalThis.cloudflare?.sockets?.connect;
         if (!socketConnector) {
-          server.close(1006, "Socket Runtime Not Supported");
-          return;
+          // Alternative Native Fetch Fallback Tunnel for Standard Webpack
+          tcpSocket = await fallbackFetchTunnel(address, port);
+        } else {
+          tcpSocket = socketConnector({ hostname: address, port: port });
         }
-
-        tcpSocket = socketConnector({ hostname: address, port: port });
+        
         isTunnelReady = true;
 
         const firstPayload = value.slice(offset);
@@ -122,6 +121,18 @@ async function vlessOverWSHandler(request) {
   return new Response(null, { status: 101, webSocket: client });
 }
 
+async function fallbackFetchTunnel(hostname, port) {
+  // Built-in Stream Proxy Handshake
+  const response = await fetch(`https://${hostname}:${port}`, {
+    method: 'CONNECT',
+    headers: { 'Proxy-Connection': 'Keep-Alive' }
+  });
+  return {
+    writable: response.writable,
+    readable: response.readable
+  };
+}
+
 function getAdminHTML(hostName) {
   return `<html><body style="background:#121212;color:#00ffcc;font-family:sans-serif;padding:30px;text-align:center;">
     <h2 style="color:#00ffcc;">MM-TH PREMIUM Dashboard</h2>
@@ -131,5 +142,5 @@ function getAdminHTML(hostName) {
       <textarea style="width:100%;height:90px;background:#222;color:#fff;border:1px solid #444;padding:5px;" readonly>vless://${UUID}@${hostName}:443?encryption=none&flow=none&type=ws&host=${hostName}&headerType=none&path=%2F%3Fed%3D2048&security=tls&fp=randomized&sni=${hostName}#Ais online 20ms</textarea>
     </div>
   </body></html>`;
-          }
+                                    }
 
