@@ -1,36 +1,34 @@
-// MM-TH PREMIUM - Dedicated Workers Engine (Anti-Error 1101 & Auto-Ping)
+// MM-TH PREMIUM - Dedicated Cloudflare Pages VLESS Engine
 const UUID = 'b67db792-7ec0-449d-b4b6-079d86a4e21a';
 
-addEventListener('fetch', event => {
-  event.respondWith(handleRequest(event.request));
-});
+export default {
+  async fetch(request, env) {
+    try {
+      const upgradeHeader = request.headers.get('Upgrade');
+      if (upgradeHeader === 'websocket') {
+        return await vlessOverWSHandler(request);
+      }
 
-async function handleRequest(request) {
-  try {
-    const upgradeHeader = request.headers.get('Upgrade');
-    if (upgradeHeader === 'websocket') {
-      return await vlessOverWSHandler(request);
+      const url = new URL(request.url);
+      const hostName = url.hostname;
+
+      if (url.pathname === '/panel') {
+        return new Response(getAdminHTML(hostName), {
+          headers: { 'Content-Type': 'text/html;charset=utf-8' }
+        });
+      }
+
+      if (url.pathname === '/sub') {
+        const rawConfigs = [`vless://${UUID}@${hostName}:443?encryption=none&flow=none&type=ws&host=${hostName}&headerType=none&path=%2F%3Fed%3D2048&security=tls&fp=randomized&sni=${hostName}#Ais online 20ms`].join('\n');
+        return new Response(btoa(rawConfigs), { headers: { 'Content-Type': 'text/plain;charset=utf-8' } });
+      }
+
+      return new Response('MM-TH PREMIUM Pages Core Active.', { status: 200 });
+    } catch (err) {
+      return new Response(err.toString(), { status: 500 });
     }
-
-    const url = new URL(request.url);
-    const hostName = url.hostname;
-
-    if (url.pathname === '/panel') {
-      return new Response(getAdminHTML(hostName), {
-        headers: { 'Content-Type': 'text/html;charset=utf-8' }
-      });
-    }
-
-    if (url.pathname === '/sub') {
-      const rawConfigs = [`vless://${UUID}@${hostName}:443?encryption=none&flow=none&type=ws&host=${hostName}&headerType=none&path=%2F%3Fed%3D2048&security=tls&fp=randomized&sni=${hostName}#Ais online 20ms`].join('\n');
-      return new Response(btoa(rawConfigs), { headers: { 'Content-Type': 'text/plain;charset=utf-8' } });
-    }
-
-    return new Response('MM-TH PREMIUM Production Worker Active.', { status: 200 });
-  } catch (err) {
-    return new Response(err.toString(), { status: 500 });
   }
-}
+};
 
 async function vlessOverWSHandler(request) {
   const pair = new WebSocketPair();
@@ -84,10 +82,9 @@ async function vlessOverWSHandler(request) {
           return; 
         }
 
-        // Outbound TCP Socket Connector
         const socketConnector = globalThis.connect || globalThis.cloudflare?.sockets?.connect;
         if (!socketConnector) {
-          server.close(1006, "Sockets Core Missing");
+          server.close(1006, "Sockets Integration Missing");
           return;
         }
 
@@ -124,12 +121,12 @@ async function vlessOverWSHandler(request) {
 
 function getAdminHTML(hostName) {
   return `<html><body style="background:#121212;color:#00ffcc;font-family:sans-serif;padding:30px;text-align:center;">
-    <h2 style="color:#00ffcc;">MM-TH PREMIUM Dashboard</h2>
+    <h2 style="color:#00ffcc;">MM-TH PREMIUM Pages Panel</h2>
     <hr style="border:1px solid #333;">
     <p style="color:#aaa;">Host Domain: ${hostName}</p>
     <div style="margin-top:20px;text-align:left;display:inline-block;width:90%;">
       <textarea style="width:100%;height:90px;background:#222;color:#fff;border:1px solid #444;padding:5px;" readonly>vless://${UUID}@${hostName}:443?encryption=none&flow=none&type=ws&host=${hostName}&headerType=none&path=%2F%3Fed%3D2048&security=tls&fp=randomized&sni=${hostName}#Ais online 20ms</textarea>
     </div>
   </body></html>`;
-          }
+    }
 
