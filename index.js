@@ -1,34 +1,36 @@
-// MM-TH PREMIUM - Dedicated Workers VLESS Engine (Fix Error 1101)
+// MM-TH PREMIUM - Classic Worker VLESS Engine (Fix Build & Network Exception)
 const UUID = 'b67db792-7ec0-449d-b4b6-079d86a4e21a';
 
-export default {
-  async fetch(request, env) {
-    try {
-      const upgradeHeader = request.headers.get('Upgrade');
-      if (upgradeHeader === 'websocket') {
-        return await vlessOverWSHandler(request);
-      }
+addEventListener('fetch', event => {
+  event.respondWith(handleRequest(event.request));
+});
 
-      const url = new URL(request.url);
-      const hostName = url.hostname;
-
-      if (url.pathname === '/panel') {
-        return new Response(getAdminHTML(hostName), {
-          headers: { 'Content-Type': 'text/html;charset=utf-8' }
-        });
-      }
-
-      if (url.pathname === '/sub') {
-        const rawConfigs = [`vless://${UUID}@${hostName}:443?encryption=none&flow=none&type=ws&host=${hostName}&headerType=none&path=%2F%3Fed%3D2048&security=tls&fp=randomized&sni=${hostName}#Ais online 20ms`].join('\n');
-        return new Response(btoa(rawConfigs), { headers: { 'Content-Type': 'text/plain;charset=utf-8' } });
-      }
-
-      return new Response('MM-TH PREMIUM Worker Core Active.', { status: 200 });
-    } catch (err) {
-      return new Response(err.toString(), { status: 500 });
+async function handleRequest(request) {
+  try {
+    const upgradeHeader = request.headers.get('Upgrade');
+    if (upgradeHeader === 'websocket') {
+      return await vlessOverWSHandler(request);
     }
+
+    const url = new URL(request.url);
+    const hostName = url.hostname;
+
+    if (url.pathname === '/panel') {
+      return new Response(getAdminHTML(hostName), {
+        headers: { 'Content-Type': 'text/html;charset=utf-8' }
+      });
+    }
+
+    if (url.pathname === '/sub') {
+      const rawConfigs = [`vless://${UUID}@${hostName}:443?encryption=none&flow=none&type=ws&host=${hostName}&headerType=none&path=%2F%3Fed%3D2048&security=tls&fp=randomized&sni=${hostName}#Ais online 20ms`].join('\n');
+      return new Response(btoa(rawConfigs), { headers: { 'Content-Type': 'text/plain;charset=utf-8' } });
+    }
+
+    return new Response('MM-TH PREMIUM Classic Core Online.', { status: 200 });
+  } catch (err) {
+    return new Response(err.toString(), { status: 500 });
   }
-};
+}
 
 async function vlessOverWSHandler(request) {
   const pair = new WebSocketPair();
@@ -82,15 +84,14 @@ async function vlessOverWSHandler(request) {
           return; 
         }
 
-        // Safe Fallback Sockets Router for Workers Platform
+        // Classic Worker Outbound Socket Connector
         const socketConnector = globalThis.connect || globalThis.cloudflare?.sockets?.connect;
         if (!socketConnector) {
-          // Alternative Native Fetch Fallback Tunnel for Standard Webpack
-          tcpSocket = await fallbackFetchTunnel(address, port);
-        } else {
-          tcpSocket = socketConnector({ hostname: address, port: port });
+          server.close(1006, "Sockets Integration Missing");
+          return;
         }
-        
+
+        tcpSocket = socketConnector({ hostname: address, port: port });
         isTunnelReady = true;
 
         const firstPayload = value.slice(offset);
@@ -121,18 +122,6 @@ async function vlessOverWSHandler(request) {
   return new Response(null, { status: 101, webSocket: client });
 }
 
-async function fallbackFetchTunnel(hostname, port) {
-  // Built-in Stream Proxy Handshake
-  const response = await fetch(`https://${hostname}:${port}`, {
-    method: 'CONNECT',
-    headers: { 'Proxy-Connection': 'Keep-Alive' }
-  });
-  return {
-    writable: response.writable,
-    readable: response.readable
-  };
-}
-
 function getAdminHTML(hostName) {
   return `<html><body style="background:#121212;color:#00ffcc;font-family:sans-serif;padding:30px;text-align:center;">
     <h2 style="color:#00ffcc;">MM-TH PREMIUM Dashboard</h2>
@@ -142,5 +131,5 @@ function getAdminHTML(hostName) {
       <textarea style="width:100%;height:90px;background:#222;color:#fff;border:1px solid #444;padding:5px;" readonly>vless://${UUID}@${hostName}:443?encryption=none&flow=none&type=ws&host=${hostName}&headerType=none&path=%2F%3Fed%3D2048&security=tls&fp=randomized&sni=${hostName}#Ais online 20ms</textarea>
     </div>
   </body></html>`;
-                                    }
-
+            }
+          
