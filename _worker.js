@@ -1,4 +1,4 @@
-// BPB-CF-Pages & VLESS Core Engine for MM-TH PREMIUM
+// BPB-CF-Pages & VLESS Core Engine - Custom Host/SNI Edition
 import { connect } from 'cloudflare:sockets';
 
 const UUID = 'b67db792-7ec0-449d-b4b6-079d86a4e21a';
@@ -10,7 +10,7 @@ export default {
       const hostName = url.hostname;
       const upgradeHeader = request.headers.get('Upgrade');
 
-      // 1. Handling VLESS WebSocket Traffic (Core Connection)
+      // 1. Handling VLESS WebSocket Traffic
       if (upgradeHeader === 'websocket') {
         return await vlessOverWSHandler(request);
       }
@@ -25,8 +25,8 @@ export default {
       // 3. Handling Subscription Links
       if (url.pathname === '/sub') {
         const rawConfigs = [
-          `vless://${UUID}@${hostName}:443?encryption=none&security=tls&sni=ais.online.game.th&fp=randomized&type=ws&host=${hostName}&path=%2F%3Fed%3D2048#Ais online 20ms`,
-          `vless://${UUID}@${hostName}:443?encryption=none&security=tls&sni=true.move.h.th&fp=randomized&type=ws&host=${hostName}&path=%2F%3Fed%3D2048#True online 30ms`
+          `vless://${UUID}@${hostName}:443?encryption=none&flow=none&type=ws&host=${hostName}&headerType=none&path=%2F%3Fed%3D2048&security=tls&fp=randomized&sni=${hostName}#Ais online 20ms`,
+          `vless://${UUID}@${hostName}:443?encryption=none&flow=none&type=ws&host=${hostName}&headerType=none&path=%2F%3Fed%3D2048&security=tls&fp=randomized&sni=${hostName}#True online 30ms`
         ].join('\n');
         return new Response(btoa(rawConfigs), {
           headers: { 'Content-Type': 'text/plain;charset=utf-8' }
@@ -47,7 +47,6 @@ async function vlessOverWSHandler(request) {
 
   let address = '';
   let portWithRandomLog = '';
-  const log = (info, sep) => { console.log(`[VLESS] ${info}${sep || ''}`); };
 
   server.addEventListener('message', async ({ data }) => {
     try {
@@ -64,7 +63,7 @@ async function vlessOverWSHandler(request) {
         handleTcpToClient(tcpSocket, server)
       ]);
     } catch (error) {
-      log(error.toString());
+      console.log(error.toString());
     }
   });
 
@@ -73,22 +72,18 @@ async function vlessOverWSHandler(request) {
 
 function processVlessHeader(buffer) {
   if (buffer.byteLength < 24) return null;
-  const version = new Uint8Array(buffer.slice(0, 1));
-  const id = new Uint8Array(buffer.slice(1, 17));
-  const optLength = new Uint8Array(buffer.slice(17, 18))[0];
-  const cmd = new Uint8Array(buffer.slice(18 + optLength, 19 + optLength))[0];
+  const cmd = new Uint8Array(buffer.slice(18, 19))[0];
   if (cmd !== 1) return null; 
   
-  const port = new DataView(buffer.slice(19 + optLength, 21 + optLength)).getUint16(0);
-  const addressType = new Uint8Array(buffer.slice(21 + optLength, 22 + optLength))[0];
+  const port = new DataView(buffer.slice(19, 21)).getUint16(0);
+  const addressType = new Uint8Array(buffer.slice(21, 22))[0];
   let address = "";
-  let addressLength = 0;
-  let addressBeginIndex = 22 + optLength;
+  let addressBeginIndex = 22;
 
   if (addressType === 1) {
     address = new Uint8Array(buffer.slice(addressBeginIndex, addressBeginIndex + 4)).join('.');
   } else if (addressType === 2) {
-    addressLength = new Uint8Array(buffer.slice(addressBeginIndex, addressBeginIndex + 1))[0];
+    const addressLength = new Uint8Array(buffer.slice(addressBeginIndex, addressBeginIndex + 1))[0];
     addressBeginIndex += 1;
     address = new TextDecoder().decode(buffer.slice(addressBeginIndex, addressBeginIndex + addressLength));
   }
@@ -96,10 +91,10 @@ function processVlessHeader(buffer) {
 }
 
 async function handleClientToTcp(ws, tcp) {
-  // Logic to pipe data from WS to TCP socket
+  // Transfer logic
 }
 async function handleTcpToClient(tcp, ws) {
-  // Logic to pipe data from TCP socket to WS
+  // Transfer logic
 }
 
 function getAdminHTML(hostName) {
@@ -110,10 +105,11 @@ function getAdminHTML(hostName) {
     <p style="color:#aaa;">Sub Link: https://${hostName}/sub</p>
     <div style="margin-top:20px;text-align:left;display:inline-block;width:90%;">
       <label style="color:#fff;">AIS Config:</label>
-      <textarea style="width:100%;height:80px;background:#222;color:#fff;border:1px solid #444;padding:5px;" readonly>vless://${UUID}@${hostName}:443?encryption=none&security=tls&sni=ais.online.game.th&fp=randomized&type=ws&host=${hostName}&path=%2F%3Fed%3D2048#Ais online 20ms</textarea>
+      <textarea style="width:100%;height:90px;background:#222;color:#fff;border:1px solid #444;padding:5px;" readonly>vless://${UUID}@${hostName}:443?encryption=none&flow=none&type=ws&host=${hostName}&headerType=none&path=%2F%3Fed%3D2048&security=tls&fp=randomized&sni=${hostName}#Ais online 20ms</textarea>
       <br><br>
       <label style="color:#fff;">TRUE Config:</label>
-      <textarea style="width:100%;height:80px;background:#222;color:#fff;border:1px solid #444;padding:5px;" readonly>vless://${UUID}@${hostName}:443?encryption=none&security=tls&sni=true.move.h.th&fp=randomized&type=ws&host=${hostName}&path=%2F%3Fed%3D2048#True online 30ms</textarea>
+      <textarea style="width:100%;height:90px;background:#222;color:#fff;border:1px solid #444;padding:5px;" readonly>vless://${UUID}@${hostName}:443?encryption=none&flow=none&type=ws&host=${hostName}&headerType=none&path=%2F%3Fed%3D2048&security=tls&fp=randomized&sni=${hostName}#True online 30ms</textarea>
     </div>
   </body></html>`;
-}
+    }
+
