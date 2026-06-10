@@ -1,5 +1,9 @@
-// Cloudflare Pages Dedicated VLESS Engine - Production Core
-const UUID = 'b67db792-7ec0-449d-b4b6-079d86a4e21a';
+// Edgetunnel for Cloudflare Pages v2026 - Production Dedicated Core
+// Package Optimized for: NetMod, v2rayNG, HTTP Injector (Fixes TLS Curve preferences)
+
+const userID = 'b67db792-7ec0-449d-b4b6-079d86a4e21a'; 
+const proxyIPs = ['104.18.2.1', '104.18.3.1', 'anycast.cloudflare.com'];
+let proxyIP = proxyIPs[Math.floor(Math.random() * proxyIPs.length)];
 
 export default {
   async fetch(request, env) {
@@ -19,11 +23,14 @@ export default {
       }
 
       if (url.pathname === '/sub') {
-        const rawConfigs = [`vless://${UUID}@${hostName}:443?encryption=none&flow=none&type=ws&host=${hostName}&headerType=none&path=%2F%3Fed%3D2048&security=tls&fp=chrome&sni=${hostName}#Ais online 20ms`].join('\n');
+        // Automatically injects 'fp=chrome' to bypass Xray-Core v25+ Unsupported Curve Bug
+        const rawConfigs = [
+          `vless://${userID}@${hostName}:443?encryption=none&flow=none&type=ws&host=${hostName}&headerType=none&path=%2F%3Fed%3D2048&security=tls&fp=chrome&sni=${hostName}#Ais online 20ms`
+        ].join('\n');
         return new Response(btoa(rawConfigs), { headers: { 'Content-Type': 'text/plain;charset=utf-8' } });
       }
 
-      return new Response('MM-TH PREMIUM Pages Core Active.', { status: 200 });
+      return new Response('Edgetunnel Pages Core Active.', { status: 200 });
     } catch (err) {
       return new Response(err.toString(), { status: 500 });
     }
@@ -63,7 +70,7 @@ async function vlessOverWSHandler(request) {
         if (value.byteLength < 24) continue;
         const view = new DataView(value.buffer);
         const cmd = view.getUint8(18);
-        if (cmd !== 1) return; 
+        if (cmd !== 1) return; // Only Allow TCP Connect
 
         const port = view.getUint16(19);
         const addressType = view.getUint8(21);
@@ -78,16 +85,24 @@ async function vlessOverWSHandler(request) {
           offset += 1;
           address = new TextDecoder().decode(value.buffer.slice(offset, offset + domainLen));
           offset += domainLen;
+        } else if (addressType === 3) {
+          address = [];
+          for (let i = 0; i < 8; i++) {
+            address.push(view.getUint16(offset).toString(16));
+            offset += 2;
+          }
+          address = address.join(':');
         } else {
           return; 
         }
 
         const socketConnector = globalThis.connect || globalThis.cloudflare?.sockets?.connect;
         if (!socketConnector) {
-          server.close(1006, "Sockets Integration Missing");
+          server.close(1006, "Sockets integration missing");
           return;
         }
 
+        // Routing via Edgetunnel Logic (Target Endpoint)
         tcpSocket = socketConnector({ hostname: address, port: port });
         isTunnelReady = true;
 
@@ -120,13 +135,26 @@ async function vlessOverWSHandler(request) {
 }
 
 function getAdminHTML(hostName) {
-  return `<html><body style="background:#121212;color:#00ffcc;font-family:sans-serif;padding:30px;text-align:center;">
-    <h2 style="color:#00ffcc;">MM-TH PREMIUM Pages Panel</h2>
-    <hr style="border:1px solid #333;">
-    <p style="color:#aaa;">Host Domain: ${hostName}</p>
-    <div style="margin-top:20px;text-align:left;display:inline-block;width:90%;">
-      <textarea style="width:100%;height:90px;background:#222;color:#fff;border:1px solid #444;padding:5px;" readonly>vless://${UUID}@${hostName}:443?encryption=none&flow=none&type=ws&host=${hostName}&headerType=none&path=%2F%3Fed%3D2048&security=tls&fp=randomized&sni=${hostName}#Ais online 20ms</textarea>
+  const configStr = `vless://${userID}@${hostName}:443?encryption=none&flow=none&type=ws&host=${hostName}&headerType=none&path=%2F%3Fed%3D2048&security=tls&fp=chrome&sni=${hostName}#Ais online 20ms`;
+  return `<html>
+  <head>
+    <title>Edgetunnel Pages Panel</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+      body { background: #0f172a; color: #38bdf8; font-family: monospace; padding: 20px; text-align: center; }
+      h2 { color: #38bdf8; margin-bottom: 5px; }
+      .box { background: #1e293b; padding: 15px; border-radius: 8px; border: 1px solid #334155; margin-top: 20px; text-align: left; word-break: break-all; }
+      textarea { width: 100%; height: 80px; background: #0f172a; color: #f8fafc; border: 1px solid #475569; padding: 8px; border-radius: 4px; resize: none; font-family: monospace; font-size: 12px; }
+    </style>
+  </head>
+  <body>
+    <h2>MM-TH PREMIUM</h2>
+    <p style="color: #64748b; margin: 0;">Edgetunnel Powered VLESS Engine</p>
+    <div class="box">
+      <div style="color: #94a3b8; font-size: 13px; margin-bottom: 8px;">VLESS WS TLS Configuration:</div>
+      <textarea readonly>${configStr}</textarea>
     </div>
-  </body></html>`;
-      }
+  </body>
+  </html>`;
+  }
 
