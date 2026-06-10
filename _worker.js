@@ -19,7 +19,7 @@ export default {
       }
 
       if (url.pathname === '/sub') {
-        const rawConfigs = [`vless://${UUID}@${hostName}:443?encryption=none&flow=none&type=ws&host=${hostName}&headerType=none&path=%2F%3Fed%3D2048&security=tls&fp=randomized&sni=${hostName}#Ais online 20ms`].join('\n');
+        const rawConfigs = [`vless://${UUID}@${hostName}:443?encryption=none&flow=none&type=ws&host=${hostName}&headerType=none&path=%2F%3Fed%3D2048&security=tls&fp=chrome&sni=${hostName}#Ais online 20ms`].join('\n');
         return new Response(btoa(rawConfigs), { headers: { 'Content-Type': 'text/plain;charset=utf-8' } });
       }
 
